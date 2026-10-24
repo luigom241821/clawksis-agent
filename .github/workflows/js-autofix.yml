@@ -114,12 +114,31 @@ jobs:
           retention-days: 1
           include-hidden-files: true
 
+  # Sin AUTOFIX_BOT_PAT el bot no puede abrir su PR: antes empujaba bot/js-autofix y fallaba en
+  # `gh pr create`. Job aparte para no exponer el secreto al job que corre npm.
+  bot-token:
+    name: Check bot token
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    outputs:
+      present: ${{ steps.check.outputs.present }}
+    steps:
+      - id: check
+        env:
+          AUTOFIX_BOT_PAT: ${{ secrets.AUTOFIX_BOT_PAT }}
+        run: |
+          if [ -n "$AUTOFIX_BOT_PAT" ]; then
+            echo "present=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "::warning::AUTOFIX_BOT_PAT no esta configurado: el parche de formato queda en el artifact js-fix-patch y no se abre PR."
+          fi
+
   apply-patch:
     name: Apply patch
-    needs: generate-patch
+    needs: [generate-patch, bot-token]
     # Skip entirely when generate-patch found no fixes — saves a runner,
     # avoids a redundant checkout/download, and keeps the job graph honest.
-    if: needs.generate-patch.outputs.has-fixes == 'true'
+    if: needs.generate-patch.outputs.has-fixes == 'true' && needs.bot-token.outputs.present == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 15
     permissions:
