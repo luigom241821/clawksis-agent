@@ -6,51 +6,26 @@
 
 // path runs in the main process and is unconditional.
 
-
-
 export function installClipboardShim() {
-
   const ipc = window.clawkDesktop?.writeClipboard
 
-
-
   if (!ipc || !navigator.clipboard) {
-
     return
-
   }
-
-
 
   const native = navigator.clipboard.writeText?.bind(navigator.clipboard)
 
-
-
   const writeText = async (text: string) => {
-
     try {
-
       await ipc(text)
-
     } catch {
-
       await native?.(text)
-
     }
-
   }
-
-
 
   try {
-
     Object.defineProperty(navigator.clipboard, 'writeText', { configurable: true, value: writeText, writable: true })
-
   } catch {
-
     // Browser refused override; primitives keep using the native API.
-
   }
-
 }
-

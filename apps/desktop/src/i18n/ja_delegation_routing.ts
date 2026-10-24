@@ -29,7 +29,8 @@ export const jaDelegationRouting: DelegationRoutingTranslations = {
   modeFailed: 'サブエージェントのルーティングを変更できませんでした',
   loadFailed: 'サブエージェントのルーティングを読み込めませんでした',
   blockedPill: '動作していません',
-  blockedDetail: 'このモードが保存されているため、Clawksis は黙って既定を使わず、すべてのサブエージェントを拒否します。',
+  blockedDetail:
+    'このモードが保存されているため、Clawksis は黙って既定を使わず、すべてのサブエージェントを拒否します。',
   blockedMissing: 'Advanced Delegation をインストールするまで、サブエージェントは起動しません。',
   blockedDisabled: 'このプロファイルで Advanced Delegation をオンにするまで、サブエージェントは起動しません。',
   blockedNotLoaded:

@@ -563,7 +563,8 @@ export const ruOverrides = {
       modelPricingTitle: 'Цены моделей',
       modelPricingDesc: 'Показывать в выборе модели цены за миллион токенов: ввод, вывод и чтение из кэша.',
       reactionsTitle: 'Реакции на сообщения',
-      reactionsDesc: 'Эмодзи-тапбеки в стиле iMessage — реагируйте на сообщения, и Clawksis сможет реагировать на ваши.',
+      reactionsDesc:
+        'Эмодзи-тапбеки в стиле iMessage — реагируйте на сообщения, и Clawksis сможет реагировать на ваши.',
       composerPopoutTitle: 'Плавающий композер',
       composerPopoutDesc:
         'Позволяет вытягивать композер из его док-зоны. Когда выключено, он остаётся закреплённым внизу.',
@@ -1309,7 +1310,8 @@ export const ruOverrides = {
       noKeysMatch: 'Провайдеры, подходящие под поиск, не найдены.',
       localEndpoint: {
         title: 'Локальный / свой эндпоинт',
-        description: 'Направьте Clawksis на любой OpenAI-совместимый эндпоинт (Zyphra, vLLM, llama.cpp, Ollama и т. д.).'
+        description:
+          'Направьте Clawksis на любой OpenAI-совместимый эндпоинт (Zyphra, vLLM, llama.cpp, Ollama и т. д.).'
       },
       loading: 'Загрузка провайдеров…'
     },
@@ -3429,7 +3431,8 @@ export const ruOverrides = {
       address: 'Адрес',
       addressPlaceholder: 'Введите адрес',
       blankPageBody: 'Введите адрес выше, чтобы просматривать, или попросите Clawksis открыть страницу.',
-      finishedRestarting: message => `Clawksis завершил перезапуск сервера предпросмотра${message ? `: ${message}` : ''}`,
+      finishedRestarting: message =>
+        `Clawksis завершил перезапуск сервера предпросмотра${message ? `: ${message}` : ''}`,
       failedRestarting: message => `Перезапуск сервера не удался: ${message}`,
       unknownError: 'неизвестная ошибка',
       restartedTitle: 'Сервер предпросмотра перезапущен',

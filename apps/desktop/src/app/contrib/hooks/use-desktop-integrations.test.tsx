@@ -348,9 +348,7 @@ describe('useDesktopIntegrations', () => {
 
       render({ profileReady: true, sessions: [session({ id: 'other-session', profile: 'default' })] })
 
-      await waitFor(() =>
-        expect(window.localStorage.getItem('clawk.desktop.lastSessionId.profile.default')).toBeNull()
-      )
+      await waitFor(() => expect(window.localStorage.getItem('clawk.desktop.lastSessionId.profile.default')).toBeNull())
       expect(navigate).not.toHaveBeenCalledWith('/unlisted-session', { replace: true })
     })
 

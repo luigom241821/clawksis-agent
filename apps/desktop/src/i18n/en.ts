@@ -408,7 +408,8 @@ export const en: Translations = {
     updateReadyTitle: 'Update ready',
     updateReadyMessage: count => `${count} new change${count === 1 ? '' : 's'} available.`,
     updateReadyMessageUnknown: 'A new update is available.',
-    updateReadyMessageAppInstaller: 'A new version of Clawksis is ready. Update now and Windows will finish it for you.',
+    updateReadyMessageAppInstaller:
+      'A new version of Clawksis is ready. Update now and Windows will finish it for you.',
     seeWhatsNew: "See what's new",
     mcp: {
       needsAuthTitle: 'MCP server needs re-authentication',
@@ -881,7 +882,8 @@ export const en: Translations = {
       deleteAction: 'Remove saved item',
       otpField: 'Authenticator key',
       otpPlaceholder: 'Base32 secret or otpauth:// link',
-      otpHint: 'The "setup key" the site shows when you enable 2FA. With it saved, Clawksis generates the codes itself.',
+      otpHint:
+        'The "setup key" the site shows when you enable 2FA. With it saved, Clawksis generates the codes itself.',
       twoFactorBadge: '2FA auto',
       deleteTitle: 'Delete this item?',
       deleteDescription: label => `"${label}" will be removed. This cannot be undone.`,
@@ -1651,12 +1653,11 @@ export const en: Translations = {
       },
       keepGoingOnCredits: {
         title: 'Keep going on credits',
-        description:
-          'Use your credits when included usage runs out. Off: Clawksis waits for the reset.',
+        description: 'Use your credits when included usage runs out. Off: Clawksis waits for the reset.',
         approveInBrowser: 'Approve Remote Spending in your browser to change this. It applies as soon as you approve.',
         openAgain: 'Open again',
         cancel: 'Cancel',
-        approvedRetry: 'Remote Spending is approved, but the change didn\'t save.',
+        approvedRetry: "Remote Spending is approved, but the change didn't save.",
         tryAgain: 'Try again'
       },
       autoReload: {
@@ -1750,7 +1751,7 @@ export const en: Translations = {
             captionResetsIn: duration => `Resets in ${duration}`,
             captionIncluded: 'Included usage',
             valueUsed: percent => `${percent} used`
-          },
+          }
         },
         planCard: {
           freeTier: 'Free',
@@ -2802,7 +2803,8 @@ export const en: Translations = {
       menuItem: 'Connect to a remote host…',
       badge: (host: string) => `Runs on ${host}`,
       title: (profile: string) => `Connect ${profile} to a remote host`,
-      description: 'Sessions in this profile will run on the remote Clawksis you point it at, instead of this computer.',
+      description:
+        'Sessions in this profile will run on the remote Clawksis you point it at, instead of this computer.',
       urlLabel: 'Remote address',
       urlPlaceholder: 'https://clawk.example.com',
       urlInvalid: 'Enter a full address starting with http:// or https://',
@@ -3703,7 +3705,8 @@ export const en: Translations = {
     copyFullLog: 'Copy full changelog',
     manualTitle: 'Update from your terminal',
     manualUnavailableTitle: "Can't update from here",
-    manualBody: 'You installed Clawksis from the command line, so updates run there too. Paste this into your terminal:',
+    manualBody:
+      'You installed Clawksis from the command line, so updates run there too. Paste this into your terminal:',
     manualBodyBackend: 'The Clawksis backend is managed outside this app. Run this on the server that hosts it:',
     manualPickedUp: 'Clawksis will pick up the new version next time you launch it.',
     manualPickedUpBackend: 'The backend picks up the new version after the update completes.',
@@ -3842,7 +3845,8 @@ export const en: Translations = {
     bundledLocalDesc: 'Use the Clawksis runtime included with this app — the bundled backend is the local install.',
     localStartUnavailable: 'Local installation could not start. Restart Clawksis Desktop and try again.',
     remoteSetupTitle: 'Connect to existing Clawksis',
-    remoteSetupDesc: 'Enter your gateway URL. Clawksis Desktop will detect whether it needs a token or browser sign-in.',
+    remoteSetupDesc:
+      'Enter your gateway URL. Clawksis Desktop will detect whether it needs a token or browser sign-in.',
     remoteUrlTitle: 'Gateway URL',
     remoteUrlDesc: 'Use the base URL of the Clawksis gateway, including https:// when remote.',
     remoteUrlPlaceholder: 'https://gateway.example.com/clawk',

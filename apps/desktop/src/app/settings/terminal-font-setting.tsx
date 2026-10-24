@@ -6,8 +6,8 @@ import {
   setTerminalFontFamilyFromConfig,
   TERMINAL_FONT_SUGGESTIONS
 } from '@/app/right-sidebar/terminal/terminal-font'
-import { Button } from '@/components/ui/button'
 import { saveClawksisConfig } from '@/clawk'
+import { Button } from '@/components/ui/button'
 import { useI18n } from '@/i18n'
 import { notifyError } from '@/store/notifications'
 import type { ClawksisConfigRecord } from '@/types/clawk'

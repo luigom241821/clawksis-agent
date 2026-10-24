@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-import type { ClawksisReadDirResult } from '@/global'
 import type * as ClawksisModule from '@/clawk'
+import type { ClawksisReadDirResult } from '@/global'
 
 import { emitGatewayEvent } from './events'
 import { $pluginRecords, publishPlugin, setPluginEnabled } from './plugins-store'

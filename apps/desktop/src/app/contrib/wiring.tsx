@@ -132,9 +132,9 @@ import { SessionImportView } from '../session-import'
 import { SessionPickerOverlay } from '../session-picker-overlay'
 import { SessionSwitcher } from '../session-switcher'
 import { useBackgroundQueueDrain } from '../session/hooks/use-background-queue-drain'
+import { useClawksisConfig } from '../session/hooks/use-clawk-config'
 import { useContextSuggestions } from '../session/hooks/use-context-suggestions'
 import { useCwdActions } from '../session/hooks/use-cwd-actions'
-import { useClawksisConfig } from '../session/hooks/use-clawk-config'
 import { useMessageStream } from '../session/hooks/use-message-stream'
 import { useModelControls } from '../session/hooks/use-model-controls'
 import { usePreviewRouting } from '../session/hooks/use-preview-routing'
@@ -264,7 +264,9 @@ function useRecoveryRequestToasts(): void {
 
     if (backendRestartRequest > 0) {
       if ($connection.get()?.mode === 'remote') {
-        void reconnectGateway().catch(err => notifyError(err, translateNow('notifications.errors.restartClawksisFailed')))
+        void reconnectGateway().catch(err =>
+          notifyError(err, translateNow('notifications.errors.restartClawksisFailed'))
+        )
 
         return
       }

@@ -383,7 +383,10 @@ test('locateClawksis returns an explicit remoteClawksisPath unchanged', async ()
   ])
 
   assert.equal(await locateClawksis(ssh, '~/.local/bin/clawk'), '~/.local/bin/clawk')
-  assert.ok(!ssh.calls.some(cmd => cmd.includes('python3 -c')), 'an explicit remoteClawksisPath must never be rewritten')
+  assert.ok(
+    !ssh.calls.some(cmd => cmd.includes('python3 -c')),
+    'an explicit remoteClawksisPath must never be rewritten'
+  )
 })
 
 test('locateClawksis falls back to ~/.local/bin/clawk when the login-shell probe misses', async () => {

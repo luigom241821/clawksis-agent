@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 
-import { Button } from '@/components/ui/button'
 import { getActionStatus, getComputerUseStatus, grantComputerUsePermissions } from '@/clawk'
+import { Button } from '@/components/ui/button'
 import { useI18n } from '@/i18n'
 import { AlertTriangle, Check, ExternalLink, Loader2, RefreshCw, X } from '@/lib/icons'
 import { upsertDesktopActionTask } from '@/store/activity'

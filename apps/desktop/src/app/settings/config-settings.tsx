@@ -4,10 +4,10 @@ import type { ChangeEvent, ReactNode } from 'react'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useSearchParams } from 'react-router'
 
+import { getClawksisConfigSchema, getElevenLabsVoices, saveClawksisConfig } from '@/clawk'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { SegmentedControl } from '@/components/ui/segmented-control'
-import { getElevenLabsVoices, getClawksisConfigSchema, saveClawksisConfig } from '@/clawk'
 import { useI18n } from '@/i18n'
 import { triggerHaptic } from '@/lib/haptics'
 import { isSubmitEnter } from '@/lib/ime'
@@ -30,7 +30,7 @@ import { notify, notifyError } from '@/store/notifications'
 import { normalizeProfileKey } from '@/store/profile'
 import { repoDiscoveryPolicyFromConfig, repoDiscoveryPolicySignature, scanAndRecordRepos } from '@/store/projects'
 import { $settingsRequestProfile } from '@/store/settings-scope'
-import type { ConfigFieldSchema, ClawksisConfigRecord } from '@/types/clawk'
+import type { ClawksisConfigRecord, ConfigFieldSchema } from '@/types/clawk'
 
 import { clawkConfigCacheWriter, useClawksisConfigRecord } from '../hooks/use-config-record'
 import { useOnProfileSwitch } from '../hooks/use-on-profile-switch'
@@ -523,7 +523,11 @@ function ConfigSettingsInner({
             <div className="scroll-mt-6 rounded-lg" id={`setting-field-${key}`} key={key}>
               {key === 'delegation.model' ? (
                 <SubagentModelGate scope={writeScope ?? scopeProfile}>
-                  <DelegationRouteRow config={config} onConfigChange={updateConfig} scope={writeScope ?? scopeProfile} />
+                  <DelegationRouteRow
+                    config={config}
+                    onConfigChange={updateConfig}
+                    scope={writeScope ?? scopeProfile}
+                  />
                 </SubagentModelGate>
               ) : (
                 <ConfigField

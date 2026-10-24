@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useState } from 'react'
 
 import type { ProfileScope } from '@/api/client'
-import { Button } from '@/components/ui/button'
 import { getTerminalBackends, selectTerminalBackend } from '@/clawk'
+import { Button } from '@/components/ui/button'
 import { useI18n } from '@/i18n'
 import { AlertTriangle, Check, Loader2, RefreshCw } from '@/lib/icons'
 import { cn } from '@/lib/utils'

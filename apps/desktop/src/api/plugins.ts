@@ -3,7 +3,7 @@ import { isStableOpen, reconnectBackoffDelayMs } from '@clawk/shared'
 import type { ClawksisConnection } from '@/global'
 import { RECONNECT_ATTEMPT_TIMEOUT_MS, withTimeout } from '@/lib/with-timeout'
 
-import { $apiRequestScope, getApiRequestConnection, getApiRequestProfile, clawkApi, profileScoped } from './client'
+import { $apiRequestScope, clawkApi, getApiRequestConnection, getApiRequestProfile, profileScoped } from './client'
 
 /** Resolve the ACTIVE backend's connection descriptor, (connectionId,
  *  profile)-scoped — mirroring how store/profile resolves $connection: a
@@ -96,7 +96,11 @@ type PluginSocketTarget = null | string | { refused: 'permission' }
 /** The URL a plugin socket dials, or null to stay on polling. A local gateway
  *  (`authMode: 'native'`, no static token) gets a fresh one-use URL from main:
  *  its native grant rides a request header main attaches to that one dial. */
-async function pluginSocketUrl(connection: ClawksisConnection, pluginId: string, suffix: string): Promise<PluginSocketTarget> {
+async function pluginSocketUrl(
+  connection: ClawksisConnection,
+  pluginId: string,
+  suffix: string
+): Promise<PluginSocketTarget> {
   if (connection.authMode === 'native') {
     const mint = window.clawkDesktop.getPluginWsUrl
 
@@ -161,11 +165,14 @@ export function pluginSocket(pluginId: string, path: string, onMessage: (data: u
     // socket reconnect loops — an immediate-retry loop across many
     // desktop clients floods the gateway with connection attempts
     // during a restart.
-    window.setTimeout(() => {
-      if (dial === generation) {
-        void connect()
-      }
-    }, reconnectBackoffDelayMs(attempt, { baseDelayMs: 500, capMs: 30_000 }))
+    window.setTimeout(
+      () => {
+        if (dial === generation) {
+          void connect()
+        }
+      },
+      reconnectBackoffDelayMs(attempt, { baseDelayMs: 500, capMs: 30_000 })
+    )
     attempt += 1
   }
 

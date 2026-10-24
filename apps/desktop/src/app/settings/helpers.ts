@@ -1,7 +1,7 @@
 import { foldPersonalityName } from '@/lib/personalities'
 import { asText, normalize } from '@/lib/text'
 import { localShowReasoning } from '@/store/reasoning-disclosure'
-import type { ConfigFieldSchema, ClawksisConfig, ClawksisConfigRecord, ToolsetInfo } from '@/types/clawk'
+import type { ClawksisConfig, ClawksisConfigRecord, ConfigFieldSchema, ToolsetInfo } from '@/types/clawk'
 
 import { BUILTIN_PERSONALITIES, ENUM_OPTIONS, PROVIDER_GROUPS, SECTIONS } from './constants'
 

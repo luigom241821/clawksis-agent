@@ -39,7 +39,7 @@ import { installPluginSdk, sdkImportMap } from '@/sdk/runtime'
 import { notifyError } from '@/store/notifications'
 
 import { trackGatewayEventDisposers } from './events'
-import { createPluginContext, type ClawksisPlugin } from './plugin'
+import { type ClawksisPlugin, createPluginContext } from './plugin'
 import { $pluginRecords, dropPlugin, pluginActive, type PluginKind, publishPlugin } from './plugins-store'
 
 interface LoadOptions {

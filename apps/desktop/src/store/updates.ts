@@ -8,16 +8,16 @@ import { atom } from 'nanostores'
 
 import { CANONICAL_GATEWAY_PROTOCOL } from '@/api/canonical-protocol'
 import { connectionScoped, profileScoped } from '@/api/client'
+import { checkClawksisUpdate, getActionStatus, updateClawksis } from '@/clawk'
 import type {
+  ClawksisConnection,
   DesktopUpdateApplyOptions,
   DesktopUpdateApplyResult,
   DesktopUpdateProgress,
   DesktopUpdateStage,
   DesktopUpdateStatus,
-  DesktopVersionInfo,
-  ClawksisConnection
+  DesktopVersionInfo
 } from '@/global'
-import { checkClawksisUpdate, getActionStatus, updateClawksis } from '@/clawk'
 import { translateNow } from '@/i18n'
 import { persistString, storedString } from '@/lib/storage'
 import { $connectionsRegistry, refreshConnectionsRegistry } from '@/store/connections'

@@ -361,7 +361,9 @@ describe('BootFailureOverlay', () => {
 
       fireEvent.click(screen.getByRole('button', { name: /reinstall the app/i }))
       await waitFor(() =>
-        expect(openExternal).toHaveBeenCalledWith('https://samuelgradientai-sys.github.io/clawksis-agent/user-guide/desktop')
+        expect(openExternal).toHaveBeenCalledWith(
+          'https://samuelgradientai-sys.github.io/clawksis-agent/user-guide/desktop'
+        )
       )
     } finally {
       restore()

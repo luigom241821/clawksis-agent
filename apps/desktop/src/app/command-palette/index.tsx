@@ -14,12 +14,12 @@ import {
   HUD_TEXT
 } from '@/app/floating-hud'
 import { SESSION_IMPORT_ROUTE } from '@/app/routes'
+import { getClawksisConfigRecord, listAllProfileSessions } from '@/clawk'
 import { leaveIntro } from '@/components/onboarding/first-run/intro'
 import { codiconIcon } from '@/components/ui/codicon'
 import { Command, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command'
 import { HighlightMatches } from '@/components/ui/highlight-matches'
 import { KbdCombo } from '@/components/ui/kbd'
-import { getClawksisConfigRecord, listAllProfileSessions } from '@/clawk'
 import { useMediaQuery } from '@/hooks/use-media-query'
 import { useI18n } from '@/i18n'
 import { sessionTitle } from '@/lib/chat-runtime'

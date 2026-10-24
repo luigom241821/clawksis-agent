@@ -147,7 +147,9 @@ describe('ConfigSettings autosave', () => {
       ;(await screen.findByRole('switch')).click()
       await vi.advanceTimersByTimeAsync(700)
 
-      await vi.waitFor(() => expect(saveClawksisConfig).toHaveBeenCalledWith({ checkpoints: { enabled: true } }, 'nash'))
+      await vi.waitFor(() =>
+        expect(saveClawksisConfig).toHaveBeenCalledWith({ checkpoints: { enabled: true } }, 'nash')
+      )
     } finally {
       vi.useRealTimers()
     }

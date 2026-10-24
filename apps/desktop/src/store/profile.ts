@@ -1,8 +1,8 @@
 import { LOCAL_CONNECTION_ID, registryBackendScopeKey } from '@clawk/shared'
 import { atom, batch, computed } from 'nanostores'
 
+import { clawkApi, getProfiles, setApiRequestProfile, STARTUP_REQUEST_TIMEOUT_MS } from '@/clawk'
 import type { ClawksisConnection } from '@/global'
-import { getProfiles, clawkApi, setApiRequestProfile, STARTUP_REQUEST_TIMEOUT_MS } from '@/clawk'
 import { sortByProfileOrder as sortProfilesByOrder } from '@/lib/profile-order'
 import { invalidateProfileScopedQueries } from '@/lib/query-client'
 import {

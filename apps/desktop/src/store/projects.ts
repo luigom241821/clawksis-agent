@@ -9,8 +9,8 @@ import {
   projectOwnerBySessionId,
   type SidebarProjectTree
 } from '@/app/chat/sidebar/projects/workspace-groups'
+import { clawkApi, type ClawksisGateway, getClawksisConfig, type SessionInfo } from '@/clawk'
 import type { ClawksisGitBaseBranch, ClawksisGitBranch } from '@/global'
-import { getClawksisConfig, clawkApi, type ClawksisGateway, type SessionInfo } from '@/clawk'
 import { translateNow } from '@/i18n'
 import { desktopDefaultCwd, isDesktopFsRemoteMode, selectDesktopPaths, writeDesktopFileText } from '@/lib/desktop-fs'
 import { desktopGit } from '@/lib/desktop-git'

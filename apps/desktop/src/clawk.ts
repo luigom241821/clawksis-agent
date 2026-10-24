@@ -5,10 +5,10 @@
 // capabilityScoped are shared across api/ but must not reach call sites, or
 // request scoping stops having a single owner.
 export {
-  getApiRequestConnection,
-  getApiRequestProfile,
   clawkApi,
   ClawksisGateway,
+  getApiRequestConnection,
+  getApiRequestProfile,
   profileScopeKey,
   PROMPT_SUBMIT_REQUEST_TIMEOUT_MS,
   resolveOwnerNow,
@@ -48,6 +48,8 @@ export type {
   AuxiliaryModelsResponse,
   AuxiliaryTaskAssignment,
   BackendUpdateCheckResponse,
+  ClawksisConfig,
+  ClawksisConfigRecord,
   ComputerUseCheck,
   ComputerUsePermissionSource,
   ComputerUseStatus,
@@ -67,8 +69,6 @@ export type {
   ElevenLabsVoice,
   ElevenLabsVoicesResponse,
   EnvVarInfo,
-  ClawksisConfig,
-  ClawksisConfigRecord,
   LogsResponse,
   McpCatalogEntry,
   McpCatalogResponse,

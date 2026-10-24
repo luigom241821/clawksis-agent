@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-import type { DesktopConnectionsRegistry, DesktopProfileRoute, ClawksisConnection } from '@/global'
+import type { ClawksisConnection, DesktopConnectionsRegistry, DesktopProfileRoute } from '@/global'
 import { deferred } from '@/test/deferred'
 
 import { _resetConnectionsForTests, initializeConnectionsRegistry } from './connections'

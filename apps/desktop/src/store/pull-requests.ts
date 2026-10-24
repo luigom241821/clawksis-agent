@@ -1,7 +1,7 @@
 import { atom } from 'nanostores'
 
-import type { ClawksisBranchPullRequest } from '@/global'
 import { scanSessionPullRequests, type SessionInfo } from '@/clawk'
+import type { ClawksisBranchPullRequest } from '@/global'
 import { desktopGit } from '@/lib/desktop-git'
 import { Codecs, persistentAtom } from '@/lib/persisted'
 

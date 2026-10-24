@@ -1,9 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
 
 import { restoreListedSession } from '@/app/session/hooks/use-session-actions/utils'
-import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
-import { Tip } from '@/components/ui/tooltip'
 import {
   deleteSession,
   getClawksisConfigRecord,
@@ -12,6 +9,9 @@ import {
   saveClawksisConfig,
   setSessionArchived
 } from '@/clawk'
+import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
+import { Tip } from '@/components/ui/tooltip'
 import { useI18n } from '@/i18n'
 import { sessionTitle } from '@/lib/chat-runtime'
 import { pathLeaf } from '@/lib/display-path'
@@ -272,7 +272,10 @@ function AutoArchiveSetting() {
       try {
         // Sparse patch: PUT /api/config deep-merges, and echoing the cached
         // snapshot would overwrite keys other surfaces changed since it loaded.
-        await saveClawksisConfig({ sessions: { auto_archive: autoArchive, auto_archive_days: archiveDays } }, writeScope)
+        await saveClawksisConfig(
+          { sessions: { auto_archive: autoArchive, auto_archive_days: archiveDays } },
+          writeScope
+        )
       } catch (err) {
         notifyError(err, s.autoArchiveFailed)
       }

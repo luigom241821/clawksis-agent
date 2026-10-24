@@ -155,7 +155,11 @@ export function resolveClawksisOpenPath(target: ClawksisOpenTarget | null | unde
  * Build a navigate path from a parsed deep-link payload
  * (`clawk://<kind>/<name>?…` → kind/name/params).
  */
-export function pathFromClawksisDeepLink(kind: string, name: string, params: Record<string, string> = {}): string | null {
+export function pathFromClawksisDeepLink(
+  kind: string,
+  name: string,
+  params: Record<string, string> = {}
+): string | null {
   if (!kind || !name) {
     return null
   }

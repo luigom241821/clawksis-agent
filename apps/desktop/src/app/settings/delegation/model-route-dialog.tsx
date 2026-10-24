@@ -1,6 +1,7 @@
 import { REASONING_EFFORTS } from '@clawk/shared'
 import { type FormEvent, useState } from 'react'
 
+import type { DelegationModelRoute, ProfileScope } from '@/clawk'
 import { Button } from '@/components/ui/button'
 import {
   Dialog,
@@ -14,7 +15,6 @@ import { Field, FieldHint } from '@/components/ui/field'
 import { Input } from '@/components/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Textarea } from '@/components/ui/textarea'
-import type { DelegationModelRoute, ProfileScope } from '@/clawk'
 import { useI18n } from '@/i18n'
 import { findCatalogProvider } from '@/lib/model-options'
 

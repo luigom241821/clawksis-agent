@@ -1,10 +1,6 @@
 import { appendFileSync, mkdirSync } from 'node:fs'
-
 import { homedir } from 'node:os'
-
 import { join } from 'node:path'
-
-
 
 // Mirror the Python gateway's panic log (tui_gateway/server.py::_CRASH_LOG) from
 
@@ -42,8 +38,6 @@ const logDir = join(process.env.CLAWK_HOME?.trim() || join(homedir(), '.clawksis
 
 const CRASH_LOG = join(logDir, 'tui_gateway_crash.log')
 
-
-
 // Skipped under vitest so unit tests exercising start()/kill() can't write into
 
 // a real ~/.clawksis (tests must stay hermetic — see AGENTS.md).
@@ -64,20 +58,12 @@ const MAX_BREADCRUMB = 4096
 
 let warned = false
 
-
-
 export function recordParentLifecycle(line: string): void {
-
   if (!enabled) {
-
     return
-
   }
 
-
-
   try {
-
     // Collapse embedded newlines so a multi-line value (e.g. an error message)
 
     // stays one breadcrumb and can't masquerade as a separate log entry or as
@@ -86,29 +72,19 @@ export function recordParentLifecycle(line: string): void {
 
     const oneLine = line.replace(/[\r\n]+/g, ' ↵ ')
 
-
-
     const capped =
-
-      oneLine.length > MAX_BREADCRUMB ? `${oneLine.slice(0, MAX_BREADCRUMB)}… [truncated ${oneLine.length} chars]` : oneLine
-
-
+      oneLine.length > MAX_BREADCRUMB
+        ? `${oneLine.slice(0, MAX_BREADCRUMB)}… [truncated ${oneLine.length} chars]`
+        : oneLine
 
     mkdirSync(logDir, { recursive: true })
 
     appendFileSync(CRASH_LOG, `[tui-parent] ${new Date().toISOString()} ${capped}\n`)
-
   } catch {
-
     if (!warned) {
-
       warned = true
 
       process.stderr.write('clawk-tui: parent lifecycle log unavailable\n')
-
     }
-
   }
-
 }
-
