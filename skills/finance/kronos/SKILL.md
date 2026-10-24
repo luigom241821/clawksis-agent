@@ -1,25 +1,41 @@
 ---
 name: kronos
-description: Forecast stock/crypto prices; read eToro data and portfolio.
-version: 0.1.0
+description: Forecast stocks/crypto; eToro data and limited trading.
+version: 0.2.0
 author: samuelgradientai-sys, Clawksis
 license: MIT
 platforms: [linux, macos, windows]
 metadata:
   clawk:
-    tags: [Finance, Forecasting, Stocks, Crypto, eToro, Portfolio, Candlesticks, Time Series]
+    tags: [Finance, Forecasting, Stocks, Crypto, eToro, Portfolio, Trading, Time Series]
     category: finance
     related_skills: [stocks]
+    config:
+      - key: kronos.trading.enabled
+        description: "Let the agent place eToro orders on its own inside the limits below (off unless the user turns it on)"
+        default: false
+      - key: kronos.trading.account
+        description: "eToro account the orders go to: demo (virtual money) or real"
+        default: demo
+      - key: kronos.trading.max_order_usd
+        description: "Maximum USD a single buy may invest"
+        default: 100
+      - key: kronos.trading.max_daily_usd
+        description: "Maximum USD all buys of one UTC day may invest together"
+        default: 300
+      - key: kronos.trading.max_orders_per_day
+        description: "Maximum number of buys per UTC day"
+        default: 5
 required_environment_variables:
   - name: ETORO_API_KEY
     prompt: eToro public API key (sent as x-api-key)
-    help: "eToro > Settings > Trading > API Key Management. Only needed for eToro data; CSV files work without it."
-    required_for: "eToro market data and portfolio (read-only)"
+    help: "eToro > Settings > Trading > API Key Management. Only needed for eToro data or trading; CSV files work without it."
+    required_for: "eToro market data, portfolio and (when enabled) trading"
     optional: true
   - name: ETORO_USER_KEY
     prompt: eToro user key (sent as x-user-key; shown only once when created)
-    help: "eToro > Settings > Trading > API Key Management. Only needed for eToro data; CSV files work without it."
-    required_for: "eToro market data and portfolio (read-only)"
+    help: "eToro > Settings > Trading > API Key Management. Only needed for eToro data or trading; CSV files work without it."
+    required_for: "eToro market data, portfolio and (when enabled) trading"
     optional: true
 ---
 
@@ -27,10 +43,12 @@ required_environment_variables:
 
 Forecasts the next N candles (open/high/low/close/volume) of a stock, ETF, index or crypto
 with the open-source Kronos foundation model, running locally on CPU, and pulls candles or
-the user's open positions from eToro's Public API. eToro access is read-only: the client has
-no order, close or edit endpoints. Kronos is a research model that often fails to beat
-"repeat the last close", so every forecast ships with a backtest-based honesty check and a
-not-financial-advice disclaimer; it is not a live-quote or fundamentals tool.
+the user's open positions from eToro's Public API. When the user turns trading on, it can
+also buy (market, by USD amount, long-only, no leverage) and close positions on its own, inside
+hard limits that the script enforces: demo account by default, a per-order cap, and a daily cap
+on USD and number of buys. Kronos is a research model that often fails to beat "repeat the last
+close", so every forecast ships with a backtest-based honesty check and a not-financial-advice
+disclaimer; it is not a live-quote or fundamentals tool.
 
 ## When to Use
 
@@ -42,8 +60,12 @@ not-financial-advice disclaimer; it is not a live-quote or fundamentals tool.
 - Reviewing an eToro portfolio: positions, weights, unrealized P&L, copy-trading, then
   forecasting the largest holdings.
 - Judging whether a forecast model adds value for one instrument (walk-forward backtest).
-- Not for: placing or changing trades (never possible here; the user trades in the eToro
-  app), live quotes or company fundamentals (the optional `stocks` skill covers Yahoo data).
+- Trading on eToro when it is enabled: "compra 50 dólares de Apple", "vende mi posición de
+  Tesla", "opera automáticamente con Kronos", "cierra la mitad de BTC", "¿cuánto me queda del
+  límite de hoy?".
+- Not for: leverage, short selling, stop-loss edits or limit orders (not implemented; the user
+  does those in the eToro app), live quotes or company fundamentals (the optional `stocks`
+  skill covers Yahoo data).
 
 ## Prerequisites
 
@@ -62,6 +84,12 @@ not-financial-advice disclaimer; it is not a live-quote or fundamentals tool.
   one environment (real or demo) and the user key is shown only once. If the user pastes keys
   in chat, save them with `clawk config set ETORO_API_KEY ...` / `clawk config set
   ETORO_USER_KEY ...` through `terminal`, never echo them back, then continue.
+- **Trading (optional, off by default)**: the user turns it on with `clawk config set
+  skills.config.kronos.trading.enabled true`. Orders go to the **demo** account unless the user
+  sets `skills.config.kronos.trading.account real`, and demo trading needs a key pair created in
+  the eToro demo (virtual) portfolio. Limits: `max_order_usd` (100), `max_daily_usd` (300) and
+  `max_orders_per_day` (5) under the same prefix. The loaded skill shows the current values in
+  its `[Skill config]` block. Only the user changes these settings; never change them yourself.
 
 ## How to Run
 
@@ -89,6 +117,14 @@ python3 ${CLAWK_SKILL_DIR}/scripts/etoro_data.py check
 python3 ${CLAWK_SKILL_DIR}/scripts/etoro_data.py search TSLA
 python3 ${CLAWK_SKILL_DIR}/scripts/etoro_data.py candles BTC --interval OneHour --count 500 --output btc_1h.csv
 python3 ${CLAWK_SKILL_DIR}/scripts/etoro_data.py portfolio --account real --format table
+
+# trading (only when enabled; the script enforces account and limits)
+python3 ${CLAWK_SKILL_DIR}/scripts/etoro_trade.py status
+python3 ${CLAWK_SKILL_DIR}/scripts/etoro_trade.py positions
+python3 ${CLAWK_SKILL_DIR}/scripts/etoro_trade.py buy AAPL --amount 50 --reason "backtest adds_value, +2.1% in 5d" --dry-run
+python3 ${CLAWK_SKILL_DIR}/scripts/etoro_trade.py buy AAPL --amount 50 --reason "backtest adds_value, +2.1% in 5d"
+python3 ${CLAWK_SKILL_DIR}/scripts/etoro_trade.py close 123456789 --reason "forecast turned down"
+python3 ${CLAWK_SKILL_DIR}/scripts/etoro_trade.py close 123456789 --units 0.5 --reason "take half profit"
 
 # honesty check, then forecast
 python3 ${CLAWK_SKILL_DIR}/scripts/kronos_backtest.py --etoro AAPL --interval OneDay
@@ -132,16 +168,36 @@ Intervals: `OneMinute`, `FiveMinutes`, `TenMinutes`, `FifteenMinutes`, `ThirtyMi
    Frame results as scenarios, never as buy/sell instructions.
 7. **Recurring forecasts** on request: schedule a `cronjob` that runs the backtest + forecast
    and delivers the summary and chart to the user's channel.
+8. **Trading** (only when `etoro_trade.py status` shows `enabled: true`). The user chose
+   automatic trading inside limits, so do not ask before each order, but:
+   - Buy only when the backtest verdict for that symbol and interval is `adds_value` and the
+     forecast points up, or when the user names a specific trade. Never trade on
+     `worse_than_naive` or `inconclusive`.
+   - Size within the limits from `status` (`usd_left`, `buys_left`); the script refuses the
+     rest. Never split one decision into several orders to get around a cap.
+   - Sell by closing positions (`positions` lists their ids); closes are not capped.
+   - Always pass a one-line `--reason` (verdict + forecast), and after every order tell the
+     user what was bought or sold, the amount, the status and why. `submitted` or `placed`
+     means eToro has not filled it yet; check `positions` later.
+   - Automatic runs on a schedule: a `cronjob` that runs backtest, forecast and, when the rules
+     above allow it, `etoro_trade.py`, then reports to the user's channel.
 
 ## Pitfalls
 
 - **Not advice, and often no better than naive.** Independent tests (upstream issues #354,
   #375) found Kronos losing to "repeat the last close" and its sampled bands covering ~58% of
   outcomes instead of 90%. Never present a forecast without the backtest verdict.
-- **Read-only eToro.** Requests to buy, sell, close or set stops: explain this skill cannot
-  trade and point the user to the eToro app. Do not look for workarounds.
-- **401/403 from eToro**: wrong key, a demo key used with `--account real` (or the reverse), or
-  a key without that permission. `etoro_data.py check` shows the granted scopes.
+- **Trading is off until the user turns it on.** If `status` says `enabled: false`, explain
+  how the user enables it; do not enable it, raise limits or switch to the real account
+  yourself, and never call eToro trading endpoints any other way than `etoro_trade.py`.
+- **Limits are hard.** A refused order (`TradingRefused`) is final for today unless the user
+  changes the limits. An `unknown` status (network failure) keeps counting toward the daily
+  limit: check `positions` before buying again, never resend blindly.
+- **Minimums and market hours.** eToro rejects buys under the instrument minimum (HTTP 400);
+  stock orders outside market hours stay `placed` until the open.
+- **401/403 from eToro**: wrong key, a demo key used with `--account real` (or the reverse), a
+  demo key while `trading.account` is `real` (or the reverse), or a key without that
+  permission. `etoro_data.py check` shows the granted scopes.
 - **eToro candle limits**: at most 1000 bars per request, always ending at the latest bar; the
   still-forming candle is dropped automatically. For longer daily history use `OneWeek` or a CSV.
 - **Unverified API details**: the official reference could not be fetched when this skill was
@@ -168,7 +224,9 @@ Details: `references/etoro-api.md` (endpoints, verified vs assumed fields) and
 python3 ${CLAWK_SKILL_DIR}/scripts/kronos_setup.py --check
 python3 ${CLAWK_SKILL_DIR}/scripts/kronos_forecast.py --input prices.csv --horizon 5 --format json
 python3 ${CLAWK_SKILL_DIR}/scripts/etoro_data.py check
+python3 ${CLAWK_SKILL_DIR}/scripts/etoro_trade.py status
 ```
 
 `--check` prints `"ok": true`; the forecast JSON has 5 `forecast` rows with numeric `close`,
-`close_p10`, `close_p90` and a `disclaimer`; `check` prints `"ok": true` and the eToro username.
+`close_p10`, `close_p90` and a `disclaimer`; `check` prints `"ok": true` and the eToro username;
+`status` prints the trading settings and today's remaining limits.

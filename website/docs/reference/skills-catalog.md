@@ -78,7 +78,7 @@ If a skill is missing from this list but present in the repo, the catalog is reg
 
 | Skill | Description | Path |
 |-------|-------------|------|
-| [`kronos`](../user-guide/skills/bundled/finance/finance-kronos.md) | Forecast stock/crypto prices; read eToro data and portfolio. | `finance/kronos` |
+| [`kronos`](../user-guide/skills/bundled/finance/finance-kronos.md) | Forecast stocks/crypto; eToro data and limited trading. | `finance/kronos` |
 
 ## integrations
 

@@ -30,15 +30,15 @@ SKILL_ENV_VARS = {
         "https://developers.google.com/tenor/guides/quickstart",
     ),
     "ETORO_API_KEY": _skill(
-        "eToro Public API key, sent as x-api-key (read-only market data and portfolio for "
-        "the `kronos` skill)",
+        "eToro Public API key, sent as x-api-key (market data, portfolio and, when enabled "
+        "in config.yaml, limited trading for the `kronos` skill)",
         "eToro public API key",
         "https://api-portal.etoro.com",
         help="eToro > Settings > Trading > API Key Management; pair it with ETORO_USER_KEY",
     ),
     "ETORO_USER_KEY": _skill(
-        "eToro user key, sent as x-user-key (read-only market data and portfolio for the "
-        "`kronos` skill)",
+        "eToro user key, sent as x-user-key (market data, portfolio and, when enabled in "
+        "config.yaml, limited trading for the `kronos` skill)",
         "eToro user key",
         "https://api-portal.etoro.com",
         help="Shown once when the key is created; keys belong to the real OR demo account",
