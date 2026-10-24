@@ -87,8 +87,8 @@ After difficult/iterative tasks, offer to save as a skill. If a skill you loaded
     - himalaya: Himalaya CLI: IMAP/SMTP email from terminal. [Communication]
   emil-design-eng:
     - emil-design-eng: Design-engineering rules for polished UI and animation. [ux, components, accessibility, frontend]
-  finance: Skills for markets and personal investing — stock and crypto price forecasts, broker data (eToro), portfolio review, and backtests of forecasting models.
-    - kronos: Forecast stock/crypto prices; read eToro data and portfolio. [Forecasting, Stocks, Candlesticks, Time Series]
+  finance: Skills for markets and personal investing — stock and crypto price forecasts, broker data and limited automated trading (eToro), portfolio review, and backtests of forecasting models.
+    - kronos: Forecast stocks/crypto; eToro data and limited trading. [Forecasting, Portfolio, Time Series]
   integrations:
     - notion-mcp: Conecta y automatiza Notion vía su servidor MCP oficial. [database, enrichment, cron, automation, no-code]
     - supabase: Build on Supabase: Postgres, auth, RLS, storage, functions. [database, edge-functions, realtime]

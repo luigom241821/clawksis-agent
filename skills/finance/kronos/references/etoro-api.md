@@ -1,4 +1,4 @@
-# eToro Public API — what `etoro_data.py` calls
+# eToro Public API — what `etoro_data.py` and `etoro_trade.py` call
 
 The official reference lives at `https://api-portal.etoro.com` (developer portal) and
 `https://builders.etoro.com` (guides). Neither could be fetched when this skill was written
@@ -24,7 +24,7 @@ Keys are created in the eToro app under Settings > Trading > API Key Management,
 key pair belongs to ONE environment: real or demo. `GET /api/v1/me` returns the username and
 the scopes granted to the pair; a 403 elsewhere means the pair lacks that endpoint's scope.
 Whether a key can be limited to read-only scopes at creation time is **UNVERIFIED** — if the
-portal offers it, choose read-only; this client never needs more.
+portal offers it and trading stays off, choose read-only; `etoro_trade.py` needs trading scope.
 
 Base URL: `https://public-api.etoro.com`. The client refuses redirects so the key headers are
 never replayed to another host, and refuses any path outside the read-only prefixes
@@ -56,9 +56,29 @@ invested incl. collateral), `openRate`, `leverage`, `unrealizedPnL.pnL`, `mirror
 - Error bodies come in several envelopes (`errorMessage`, `message`, `detail`, `title`); the
   client surfaces the first one present, capped at 300 chars, never headers or keys.
 
-## Deliberately not implemented
+## Trading (`etoro_trade.py`, only when enabled)
 
-Every trading surface — `/api/v2/trading/execution/...` (orders), market-close orders,
-position edits (stop loss / take profit), order lookups, eligibility and cost estimates — plus
-cash transactions, watchlists, social feeds and WebSocket streaming. The skill is read-only by
-design; adding any of these needs a separate, explicitly approved change.
+A separate client (`TradeClient`) that can reach exactly these routes; `etoro_data.py` stays
+GET-only. `{demo/}` is present for the demo account and absent for real.
+
+| Purpose | Route | Source / status |
+|---|---|---|
+| Market buy by amount | `POST /api/v2/trading/execution/{demo/}orders` with `{"action": "open", "transaction": "buy", "instrumentId", "settlementType": "real", "orderType": "mkt", "leverage": 1, "amount"}` → `{token, orderId, referenceId}` | Current route per the official guide; field names from etoro-go v0.1.1 and the portal's example (camelCase). Not yet exercised live by this skill: verify on demo first. |
+| Fallback buy (only if the v2 route answers 404/405) | `POST /api/v1/trading/execution/{demo/}market-open-orders/by-amount` with `{"InstrumentID", "IsBuy": true, "Leverage": 1, "Amount"}` → `{orderForOpen: {orderID, ...}, token}` | Deprecated in the official Swagger, still documented; etoropy uses it. |
+| Close a position | `POST /api/v1/trading/execution/{demo/}market-close-orders/positions/{positionId}` with `{"InstrumentId", "UnitsToDeduct"}` (`null` closes it all) → `{orderForClose, token}` | Official reference; etoro-go and etoropy agree. |
+| Order status | `GET /api/v2/trading/info/{demo/}orders:lookup?orderId=` → `{status: {id, name, errorCode, errorMessage}, positionExecutions}`; ids 1 received, 2 placed, 3 filled, 4 rejected, 5 partially filled, 7 canceled, 8 expired | etoro-go only (**UNVERIFIED**); a failed lookup leaves the order as `submitted`. |
+
+Behaviour notes:
+
+- A 200 on an open means *submitted*, not filled: execution is asynchronous.
+- `x-request-id` doubles as the idempotency key; the client retries a 429 once with the same id.
+- Trading endpoints share roughly 20 requests per 60 s.
+- Per-instrument minimum amounts are enforced by eToro (HTTP 400); the script does not guess them.
+- Settlement `real` buys the underlying asset without leverage; instruments that only trade as
+  CFDs are rejected rather than silently opened as CFDs.
+
+## Not implemented
+
+Leverage, short selling (`sellShort`), limit / market-if-touched orders, stop-loss and
+take-profit edits, order cancellation, cash transactions, watchlists, social feeds and
+WebSocket streaming. The user does those in the eToro app.
