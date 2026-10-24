@@ -301,6 +301,11 @@ Long files are truncated before injection.
 ## Skills index
 
 The skills system contributes a compact skills index to the prompt when skills tooling is available.
+Each row is `name: description [keywords]`: the description is capped at 60 characters, and the
+keywords are the skill's `tags` that the name, description and category don't already say (at most
+8), so the model can recognise a skill from a request phrased in other words or another language.
+A row is only a summary; the index tells the model to load a skill with `skill_view` before
+describing it in detail.
 
 ## Supported prompt customization surfaces
 

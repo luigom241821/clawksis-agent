@@ -976,6 +976,28 @@ def is_skill_description_truncated_for_prompt(frontmatter: dict[str, Any]) -> bo
     return len(_normalize_skill_description(frontmatter)) > SKILL_PROMPT_DESC_LIMIT
 
 
+def parse_skill_tags(tags_value) -> list[str]:
+    """Tags from frontmatter: a parsed list, "[a, b]", or "a, b"."""
+    if not tags_value:
+        return []
+    if isinstance(tags_value, list):
+        return [str(t).strip() for t in tags_value if t]
+    tags_value = str(tags_value).strip()
+    if tags_value.startswith("[") and tags_value.endswith("]"):
+        tags_value = tags_value[1:-1]
+    return [t.strip().strip("\"'") for t in tags_value.split(",") if t.strip()]
+
+
+def extract_skill_metadata_list(frontmatter: dict[str, Any], key: str) -> list[str]:
+    """``metadata.clawk.<key>`` (agentskills.io) first, then top-level ``<key>`` (tags, related_skills)."""
+    metadata = frontmatter.get("metadata")
+    clawk_meta = metadata.get("clawk") if isinstance(metadata, dict) else None
+    # A malformed ``metadata.clawk`` block must not break the skills index build.
+    if not isinstance(clawk_meta, dict):
+        clawk_meta = {}
+    return parse_skill_tags(clawk_meta.get(key) or frontmatter.get(key, ""))
+
+
 def iter_skill_index_files(skills_dir: Path, filename: str):
     """Walk skills_dir yielding sorted paths matching *filename*; prunes
     EXCLUDED_SKILL_DIRS and support dirs of skill roots."""

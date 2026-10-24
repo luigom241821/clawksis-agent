@@ -7,6 +7,48 @@ built once at session start and never re-rendered mid-conversation (prompt-cachi
 
 from __future__ import annotations
 
+# Fork: each row also carries the skill's tags as keywords so the model recognises a skill from a
+# request phrased in other words (or another language); the description alone is capped at 60 chars.
+_MAX_INDEX_KEYWORDS = 8
+
+
+def _index_summary(
+    name: str, description: str, tags: list[str], category: str = ""
+) -> str:
+    """``description [kw, ...]`` with the tags the row (name, description, category) doesn't already say."""
+    said = (
+        f"{name} {description} {category}".lower().replace("-", " ").replace("/", " ")
+    )
+    seen: set[str] = set()
+    keywords: list[str] = []
+    for tag in tags:
+        key = tag.lower().replace("-", " ")
+        if tag and key not in seen and key not in said:
+            seen.add(key)
+            keywords.append(tag)
+    if not keywords:
+        return description
+    return f"{description} [{', '.join(keywords[:_MAX_INDEX_KEYWORDS])}]".strip()
+
+
+def _label_visible_entries(
+    visible_entries: list[dict], skills_by_category: dict[str, list[tuple[str, str]]]
+) -> None:
+    """Index rows under each entry's ``load_name`` (what skill_view accepts)."""
+    from agent.skill_utils import TIER_PROJECT
+
+    for entry in (e for e in visible_entries if e["load_name"]):
+        category = entry.get("category") or "general"
+        desc = _index_summary(
+            entry["load_name"],
+            entry.get("description", ""),
+            entry.get("tags") or [],
+            category,
+        )
+        if entry["tier"] == TIER_PROJECT:
+            desc = f"[project] {desc}".strip()
+        skills_by_category.setdefault(category, []).append((entry["load_name"], desc))
+
 
 def _render_skills_index(
     skills_by_category: dict[str, list[tuple[str, str]]],
@@ -93,10 +135,12 @@ def _render_skills_index(
         # Fork: goal-phrased requests (often not in English) and "what can you do?" questions were
         # answered from general knowledge although a listed skill covered them.
         "Match by meaning, not wording: users describe goals in their own words and in any language "
-        "(a price forecast, their broker portfolio, a contract to review) without naming a skill, and "
-        "the descriptions below are short English summaries. When the user asks what you can do or "
-        "whether you can help with something, answer from this list — it is what this installation "
-        "can actually do — and name the relevant skills instead of answering from general knowledge.\n"
+        "(a price forecast, their broker portfolio, a contract to review) without naming a skill; each "
+        "line below is a short English summary, usually followed by [keywords]. When the user asks what "
+        "you can do or whether you can help with something, answer from this list — it is what this "
+        "installation can actually do — and name the relevant skills instead of answering from general "
+        "knowledge. A line is only a summary: before describing a skill in detail (what it does, what it "
+        "needs, how to use it), load it with skill_view and answer from its content.\n"
         "If a skill has issues, fix it with skill_manage(action='patch').\n"
         "After difficult/iterative tasks, offer to save as a skill. If a skill you loaded was missing steps, "
         "had wrong commands, or needed pitfalls you discovered, update it before finishing.\n"
