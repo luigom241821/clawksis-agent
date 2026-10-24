@@ -25,7 +25,11 @@ from clawk_constants import (
 )
 
 from agent.model_metadata import CHARS_PER_TOKEN
-from agent.prompt_builder_skills_index import _render_skills_index
+from agent.prompt_builder_skills_index import (
+    _index_summary,
+    _label_visible_entries,
+    _render_skills_index,
+)
 from agent.runtime_cwd import resolve_agent_cwd
 from agent.skill_utils import (
     EXCLUDED_SKILL_DIRS,
@@ -33,6 +37,7 @@ from agent.skill_utils import (
     TIER_LOCAL,
     extract_skill_conditions,
     extract_skill_description,
+    extract_skill_metadata_list,
     get_disabled_skill_names,
     get_skill_search_roots,
     iter_skill_index_files,
@@ -1287,8 +1292,8 @@ _SKILLS_PROMPT_CACHE_MAX = 32
 _SKILLS_PROMPT_CACHE: OrderedDict[tuple, str] = OrderedDict()
 _SKILLS_PROMPT_CACHE_LOCK = threading.Lock()
 # v2 added org provenance fields (org_id/org_author); v4 adds ``rel`` (SKILL.md path relative to its root) for
-# duplicate-name resolution. Older snapshots are rebuilt.
-_SKILLS_SNAPSHOT_VERSION = 4
+# duplicate-name resolution; v5 (fork) adds ``tags`` for the index keywords. Older snapshots are rebuilt.
+_SKILLS_SNAPSHOT_VERSION = 5
 
 
 def _skills_prompt_snapshot_path() -> Path:
@@ -1379,6 +1384,7 @@ def _build_snapshot_entry(
         "frontmatter_name": str(frontmatter.get("name", skill_name)),
         "rel": skill_file.relative_to(skills_dir).as_posix(),
         "description": description,
+        "tags": extract_skill_metadata_list(frontmatter, "tags"),
         "platforms": [str(p).strip() for p in platforms if str(p).strip()],
         "conditions": extract_skill_conditions(frontmatter),
         "requires_apps": _requires_apps_list(frontmatter),
@@ -1473,7 +1479,8 @@ def _plugin_skill_prompt_rows(
             desc = str(
                 meta.get("description") or ""
             ).strip() or extract_skill_description(frontmatter)
-            rows.append((name, desc))
+            tags = extract_skill_metadata_list(frontmatter, "tags")
+            rows.append((name, _index_summary(name, desc, tags)))
     except Exception:
         logger.debug("Plugin skill prompt rows unavailable", exc_info=True)
     return rows
@@ -1584,20 +1591,6 @@ def _scan_extra_root(
         except Exception as e:
             logger.debug(log_fmt, skill_file, e)
     return rows
-
-
-def _label_visible_entries(
-    visible_entries: list[dict], skills_by_category: dict[str, list[tuple[str, str]]]
-) -> None:
-    """Index rows under each entry's ``load_name`` (what skill_view accepts)."""
-    from agent.skill_utils import TIER_PROJECT
-
-    for entry in (e for e in visible_entries if e["load_name"]):
-        desc = entry.get("description", "")
-        if entry["tier"] == TIER_PROJECT:
-            desc = f"[project] {desc}".strip()
-        category = entry.get("category") or "general"
-        skills_by_category.setdefault(category, []).append((entry["load_name"], desc))
 
 
 def _oneshot_prompt_variant() -> bool:

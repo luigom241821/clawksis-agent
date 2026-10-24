@@ -9,10 +9,10 @@ from unittest.mock import patch
 import pytest
 
 import tools.skills_tool as skills_tool_module
+from agent.skill_utils import parse_skill_tags
 from tools.skills_tool import (
     _get_required_environment_variables,
     _parse_frontmatter,
-    _parse_tags,
     _get_category_from_path,
     find_all_skills,
     skill_matches_platform,
@@ -89,25 +89,25 @@ class TestParseFrontmatter:
 
 
 # ---------------------------------------------------------------------------
-# _parse_tags
+# parse_skill_tags
 # ---------------------------------------------------------------------------
 
 
 class TestParseTags:
     def test_accepted_input_forms(self):
-        assert _parse_tags(["a", "b", "c"]) == ["a", "b", "c"]
-        assert _parse_tags("a, b, c") == ["a", "b", "c"]
-        assert _parse_tags("[a, b, c]") == ["a", "b", "c"]
+        assert parse_skill_tags(["a", "b", "c"]) == ["a", "b", "c"]
+        assert parse_skill_tags("a, b, c") == ["a", "b", "c"]
+        assert parse_skill_tags("[a, b, c]") == ["a", "b", "c"]
         # Quotes are stripped.
-        result = _parse_tags("\"tag1\", 'tag2'")
+        result = parse_skill_tags("\"tag1\", 'tag2'")
         assert "tag1" in result
         assert "tag2" in result
 
     def test_empty_and_blank_items_dropped(self):
-        assert _parse_tags("") == []
-        assert _parse_tags(None) == []
-        assert _parse_tags([]) == []
-        assert _parse_tags([None, "", "valid"]) == ["valid"]
+        assert parse_skill_tags("") == []
+        assert parse_skill_tags(None) == []
+        assert parse_skill_tags([]) == []
+        assert parse_skill_tags([None, "", "valid"]) == ["valid"]
 
 
 class TestRequiredEnvironmentVariablesNormalization:

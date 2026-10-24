@@ -18,6 +18,7 @@ from tools.registry import registry, tool_error
 from clawk_cli.config import cfg_get
 from agent.skill_utils import (
     EXCLUDED_SKILL_DIRS as _EXCLUDED_SKILL_DIRS,
+    extract_skill_metadata_list,
     is_skill_support_path as _is_skill_support_path,
 )
 from tools.skills_tool_setup import (
@@ -213,18 +214,6 @@ def _get_category_from_path(skill_path: Path) -> Optional[str]:
             if len(parts := skill_path.relative_to(skills_dir).parts) >= 3:
                 return parts[0]
     return None
-
-
-def _parse_tags(tags_value) -> list[str]:
-    """Tags from frontmatter: a parsed list, "[a, b]", or "a, b"."""
-    if not tags_value:
-        return []
-    if isinstance(tags_value, list):
-        return [str(t).strip() for t in tags_value if t]
-    tags_value = str(tags_value).strip()
-    if tags_value.startswith("[") and tags_value.endswith("]"):
-        tags_value = tags_value[1:-1]
-    return [t.strip().strip("\"'") for t in tags_value.split(",") if t.strip()]
 
 
 def _is_skill_disabled(*names: str, platform: str | None = None) -> bool:
@@ -921,13 +910,9 @@ def skill_view(
                 mark_read=True,
                 hint="Use a relative path within the skill directory",
             )
-        # tags/related_skills: metadata.clawk.* (agentskills.io) first, then top-level.
         metadata = frontmatter.get("metadata")
-        clawk_meta = (
-            (metadata.get("clawk", {}) or {}) if isinstance(metadata, dict) else {}
-        )
         tags, related_skills = (
-            _parse_tags(clawk_meta.get(k) or frontmatter.get(k, ""))
+            extract_skill_metadata_list(frontmatter, k)
             for k in ("tags", "related_skills")
         )
         linked_files = _skill_linked_files(skill_dir)
