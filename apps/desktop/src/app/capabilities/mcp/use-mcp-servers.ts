@@ -3,8 +3,8 @@ import { useQuery } from '@tanstack/react-query'
 import { useEffect, useMemo, useRef, useState } from 'react'
 
 import {
-  getMcpCatalog,
   type ClawksisGateway,
+  getMcpCatalog,
   type McpCatalogEntry,
   type McpCatalogResponse,
   type McpTestResult,

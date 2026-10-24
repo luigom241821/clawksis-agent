@@ -1126,7 +1126,11 @@ const ErrorRecoveryActions: FC = () => {
             </button>
           )}
           {SEND_DIAGNOSTICS_ENABLED && (
-            <button className="aui-error-action" onClick={() => requestSendDiagnostics(diagnosticsText())} type="button">
+            <button
+              className="aui-error-action"
+              onClick={() => requestSendDiagnostics(diagnosticsText())}
+              type="button"
+            >
               <Upload className="size-3" />
               {copy.errorSendDiagnostics}
             </button>

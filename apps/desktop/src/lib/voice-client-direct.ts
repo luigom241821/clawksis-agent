@@ -1,5 +1,5 @@
 import { clawkApiAs, type OwnerScope, ownerScoped, type ResolvedOwner } from '@/api/client'
-import { getApiRequestConnection, getApiRequestProfile, clawkApi } from '@/clawk'
+import { clawkApi, getApiRequestConnection, getApiRequestProfile } from '@/clawk'
 
 /**
  * Client-direct voice: call the active profile's STT/TTS providers straight

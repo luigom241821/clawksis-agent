@@ -1,6 +1,6 @@
 import type { ModelCapabilities, ModelOptionProvider, ModelOptionsResult } from '@clawk/shared'
 
-import { getGlobalModelOptions, type ClawksisGateway } from '@/clawk'
+import { type ClawksisGateway, getGlobalModelOptions } from '@/clawk'
 
 type CatalogProviderIdentity = Partial<Pick<ModelOptionProvider, 'aliases' | 'name'>> &
   Pick<ModelOptionProvider, 'slug'>

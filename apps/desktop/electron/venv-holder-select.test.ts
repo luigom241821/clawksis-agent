@@ -2,7 +2,7 @@ import assert from 'node:assert/strict'
 
 import { test } from 'vitest'
 
-import { hasWindowsPathPrefix, isExternalVenvHolder, isClawksisOwnedVenvDaemon } from './venv-holder-select'
+import { hasWindowsPathPrefix, isClawksisOwnedVenvDaemon, isExternalVenvHolder } from './venv-holder-select'
 
 const SCRIPTS = 'C:\\Clawksis\\venv\\Scripts'
 
@@ -30,7 +30,10 @@ test('Windows path prefix match is ordinal case-insensitive', () => {
 
 test('excludes external venv holders that are not the hindsight daemon', () => {
   // a user terminal running the clawk CLI from the venv — must NOT be killed
-  assert.equal(isClawksisOwnedVenvDaemon('C:\\Clawksis\\venv\\Scripts\\clawk.exe', 'clawk chat -q "hi"', SCRIPTS), false)
+  assert.equal(
+    isClawksisOwnedVenvDaemon('C:\\Clawksis\\venv\\Scripts\\clawk.exe', 'clawk chat -q "hi"', SCRIPTS),
+    false
+  )
   // an unrelated python script using the venv interpreter
   assert.equal(
     isClawksisOwnedVenvDaemon('C:\\Clawksis\\venv\\Scripts\\python.exe', 'python C:\\tools\\import.py', SCRIPTS),

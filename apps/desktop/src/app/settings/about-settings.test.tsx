@@ -1,7 +1,7 @@
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-import type { DesktopUpdateStatus, DesktopVersionInfo, ClawksisConnection } from '@/global'
+import type { ClawksisConnection, DesktopUpdateStatus, DesktopVersionInfo } from '@/global'
 import { en } from '@/i18n/en'
 import { $confirmRequest, settleConfirm } from '@/store/confirm'
 import type * as SessionStore from '@/store/session'

@@ -2,8 +2,8 @@ import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-libra
 import { afterEach, expect, it, vi } from 'vitest'
 
 import { setApiRequestConnection } from '@/api/client'
-import type { ClawksisApiRequest } from '@/global'
 import type { ClawksisConfigRecord } from '@/clawk'
+import type { ClawksisApiRequest } from '@/global'
 import { $activeGatewayProfile } from '@/store/profile'
 import { $connection } from '@/store/session'
 

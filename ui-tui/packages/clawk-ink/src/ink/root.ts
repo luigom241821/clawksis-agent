@@ -1,25 +1,14 @@
 import { Stream } from 'stream'
 
-
-
 import type { ReactNode } from 'react'
-
-
 
 import { logForDebugging } from '../utils/debug.js'
 
-
-
 import type { FrameEvent } from './frame.js'
-
 import Ink, { type Options as InkOptions } from './ink.js'
-
 import instances from './instances.js'
 
-
-
 export type RenderOptions = {
-
   /**
 
    * Output stream where app will be rendered.
@@ -66,8 +55,6 @@ export type RenderOptions = {
 
   exitOnCtrlC?: boolean
 
-
-
   /**
 
    * Patch console methods to ensure console output doesn't mix with Ink output.
@@ -80,8 +67,6 @@ export type RenderOptions = {
 
   patchConsole?: boolean
 
-
-
   /**
 
    * Called after each frame render with timing and flicker information.
@@ -89,8 +74,6 @@ export type RenderOptions = {
    */
 
   onFrame?: (event: FrameEvent) => void
-
-
 
   /**
 
@@ -121,13 +104,9 @@ export type RenderOptions = {
    */
 
   onHyperlinkClick?: (url: string) => void
-
 }
 
-
-
 export type Instance = {
-
   /**
 
    * Replace previous root node with a new one or update props of the current root node.
@@ -153,10 +132,7 @@ export type Instance = {
   waitUntilExit: Ink['waitUntilExit']
 
   cleanup: () => void
-
 }
-
-
 
 /**
 
@@ -169,40 +145,24 @@ export type Instance = {
  */
 
 export type Root = {
-
   render: (node: ReactNode) => void
 
   unmount: () => void
 
   waitUntilExit: () => Promise<void>
-
 }
 
-
-
 export const forceRedraw = (stdout: NodeJS.WriteStream = process.stdout): boolean => {
-
   const instance = instances.get(stdout)
 
-
-
   if (!instance) {
-
     return false
-
   }
-
-
 
   instance.forceRedraw()
 
-
-
   return true
-
 }
-
-
 
 /**
 
@@ -211,13 +171,9 @@ export const forceRedraw = (stdout: NodeJS.WriteStream = process.stdout): boolea
  */
 
 export const renderSync = (node: ReactNode, options?: NodeJS.WriteStream | RenderOptions): Instance => {
-
   const opts = getOptions(options)
 
-
-
   const inkOptions: InkOptions = {
-
     stdout: process.stdout,
 
     stdin: process.stdin,
@@ -229,41 +185,26 @@ export const renderSync = (node: ReactNode, options?: NodeJS.WriteStream | Rende
     patchConsole: true,
 
     ...opts
-
   }
-
-
 
   const instance: Ink = getInstance(inkOptions.stdout, () => new Ink(inkOptions))
 
-
-
   instance.render(node)
 
-
-
   return {
-
     rerender: instance.render,
 
     unmount() {
-
       instance.unmount()
-
     },
 
     waitUntilExit: instance.waitUntilExit,
 
     cleanup: () => instances.delete(inkOptions.stdout)
-
   }
-
 }
 
-
-
 const wrappedRender = async (node: ReactNode, options?: NodeJS.WriteStream | RenderOptions): Promise<Instance> => {
-
   // Preserve the microtask boundary that `await loadYoga()` used to provide.
 
   // Without it, the first render fires synchronously before async startup work
@@ -278,17 +219,10 @@ const wrappedRender = async (node: ReactNode, options?: NodeJS.WriteStream | Ren
 
   logForDebugging(`[render] first ink render: ${Math.round(process.uptime() * 1000)}ms since process start`)
 
-
-
   return instance
-
 }
 
-
-
 export default wrappedRender
-
-
 
 /**
 
@@ -299,7 +233,6 @@ export default wrappedRender
  */
 
 export async function createRoot({
-
   stdout = process.stdout,
 
   stdin = process.stdin,
@@ -313,17 +246,12 @@ export async function createRoot({
   onFrame,
 
   onHyperlinkClick
-
 }: RenderOptions = {}): Promise<Root> {
-
   // See wrappedRender — preserve microtask boundary from the old WASM await.
 
   await Promise.resolve()
 
-
-
   const instance = new Ink({
-
     stdout,
 
     stdin,
@@ -337,10 +265,7 @@ export async function createRoot({
     onFrame,
 
     onHyperlinkClick
-
   })
-
-
 
   // Register in the instances map so that code that looks up the Ink
 
@@ -348,61 +273,35 @@ export async function createRoot({
 
   instances.set(stdout, instance)
 
-
-
   return {
-
     render: node => instance.render(node),
 
     unmount: () => instance.unmount(),
 
     waitUntilExit: () => instance.waitUntilExit()
-
   }
-
 }
 
-
-
 const getOptions = (stdout: NodeJS.WriteStream | RenderOptions | undefined = {}): RenderOptions => {
-
   if (stdout instanceof Stream) {
-
     return {
-
       stdout,
 
       stdin: process.stdin
-
     }
-
   }
 
-
-
   return stdout
-
 }
 
-
-
 const getInstance = (stdout: NodeJS.WriteStream, createInstance: () => Ink): Ink => {
-
   let instance = instances.get(stdout)
 
-
-
   if (!instance) {
-
     instance = createInstance()
 
     instances.set(stdout, instance)
-
   }
 
-
-
   return instance
-
 }
-

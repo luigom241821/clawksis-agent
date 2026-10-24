@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 
-import type { DesktopConnectionsRegistry, ClawksisConnection } from '@/global'
 import type * as Clawksis from '@/clawk'
+import type { ClawksisConnection, DesktopConnectionsRegistry } from '@/global'
 
 import { deferred } from '../test/deferred'
 

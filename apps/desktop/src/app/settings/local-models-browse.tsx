@@ -1,8 +1,6 @@
 import { type QueryClient, useQueryClient } from '@tanstack/react-query'
 import { type ReactElement, useCallback, useEffect, useRef, useState } from 'react'
 
-import { Button } from '@/components/ui/button'
-import { SearchField } from '@/components/ui/search-field'
 import {
   downloadBrowsedModel,
   type HFFileGroup,
@@ -11,6 +9,8 @@ import {
   searchHFModels,
   sideloadLocalModel
 } from '@/clawk'
+import { Button } from '@/components/ui/button'
+import { SearchField } from '@/components/ui/search-field'
 import { useI18n } from '@/i18n'
 import { Cpu, Download, FolderOpen, Loader2, Search } from '@/lib/icons'
 import { cn } from '@/lib/utils'

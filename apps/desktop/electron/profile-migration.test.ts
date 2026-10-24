@@ -528,7 +528,10 @@ test('migrateActiveProfileIfMissing prefers a single running gateway over heuris
 // ---------------------------------------------------------------------------
 
 test('profileStateDbPath puts default at clawkHome, named under profilesRoot', () => {
-  assert.equal(profileStateDbPath('default', '/home/u/.clawksis', '/home/u/.clawksis/profiles'), '/home/u/.clawksis/state.db')
+  assert.equal(
+    profileStateDbPath('default', '/home/u/.clawksis', '/home/u/.clawksis/profiles'),
+    '/home/u/.clawksis/state.db'
+  )
   assert.equal(
     profileStateDbPath('conduit', '/home/u/.clawksis', '/home/u/.clawksis/profiles'),
     '/home/u/.clawksis/profiles/conduit/state.db'

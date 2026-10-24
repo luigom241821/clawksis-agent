@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
-import type { ClawksisConnection } from '@/global'
 import type * as Clawksis from '@/clawk'
+import type { ClawksisConnection } from '@/global'
 import type { LocalCatalogModel, LocalModelsStatus } from '@/types/clawk'
 
 const backend = vi.hoisted(() => ({ catalog: vi.fn(), status: vi.fn() }))

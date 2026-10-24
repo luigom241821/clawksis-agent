@@ -125,7 +125,8 @@ export function quitPromptFor(
       .filter(line => line !== null)
       .join('\n')
       .trim(),
-    message: work.count === 1 ? 'Clawksis is still working on 1 chat.' : `Clawksis is still working on ${work.count} chats.`
+    message:
+      work.count === 1 ? 'Clawksis is still working on 1 chat.' : `Clawksis is still working on ${work.count} chats.`
   }
 }
 

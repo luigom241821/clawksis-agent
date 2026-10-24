@@ -14,7 +14,6 @@ describe('completionRequestForInput', () => {
 
   it('does not route absolute paths through slash completion', () => {
     expect(
-
       completionRequestForInput('/home/d/Desktop/agenda/CrimsonRed/.clawk/plans/2026-05-04-HANDOFF-NEXT.md')
     ).toMatchObject({
       method: 'complete.path',

@@ -40,7 +40,9 @@ describe('VersionDetails', () => {
       visible: ['Runtime', 'Embedded runtime']
     },
     {
-      version: { clawkRuntime: { type: 'external', source: { type: 'git', root: '/home/u/.clawksis/clawksis-agent' } } },
+      version: {
+        clawkRuntime: { type: 'external', source: { type: 'git', root: '/home/u/.clawksis/clawksis-agent' } }
+      },
       visible: ['Runtime', 'git (/home/u/.clawksis/clawksis-agent)'],
       absent: ['External (uses the machine runtime)']
     },

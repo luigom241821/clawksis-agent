@@ -222,7 +222,8 @@ export const frOverrides = {
       needsAuthBody: 'La connexion reste sur cet ordinateur. Rien ne le quitte.',
       retry: 'Réessayer',
       goneTitle: (name: string) => `${name} a quitté le catalogue.`,
-      goneBody: "Clawksis ne peut plus l'appeler. La ligne reste jusqu'à ce que vous la supprimiez : rien ne disparaît.",
+      goneBody:
+        "Clawksis ne peut plus l'appeler. La ligne reste jusqu'à ce que vous la supprimiez : rien ne disparaît.",
       remove: 'Supprimer',
       offTitle: (name: string) => `${name} est désactivé.`,
       offBody: "Activez-le avec l'interrupteur ci-dessus pour lire les outils qu'il apporte.",
@@ -3634,7 +3635,8 @@ export const frOverrides = {
       title: 'La base de données des sessions est endommagée',
       body: (profiles: string) =>
         `Clawksis ne peut pas lire tout l’historique des sessions de ${profiles}. Les conversations absentes de cette liste n’ont pas été supprimées ; le fichier qui les contient est endommagé.`,
-      action: 'Quittez Clawksis sur ce profil, puis inspectez le fichier sans le modifier, ou restaurez un instantané :',
+      action:
+        'Quittez Clawksis sur ce profil, puis inspectez le fichier sans le modifier, ou restaurez un instantané :',
       guide: 'Guide de récupération'
     },
     noFilterMatches: 'Aucune session ne correspond à ces filtres',
@@ -4731,7 +4733,8 @@ export const frOverrides = {
       askRestart: 'Demander à Clawksis de redémarrer le serveur',
       lookingRestart: taskId => `Clawksis recherche un serveur d'aperçu à redémarrer (${taskId})`,
       restartingTitle: "Redémarrage du serveur d'aperçu",
-      restartingMessage: "Clawksis travaille en arrière-plan. Surveillez la console d'aperçu pour suivre la progression.",
+      restartingMessage:
+        "Clawksis travaille en arrière-plan. Surveillez la console d'aperçu pour suivre la progression.",
       startRestartFailed: message => `Impossible de démarrer le redémarrage du serveur : ${message}`,
       restartFailed: 'Échec du redémarrage du serveur',
       hideConsole: "Masquer la console d'aperçu",

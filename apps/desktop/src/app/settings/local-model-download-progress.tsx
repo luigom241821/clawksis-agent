@@ -1,7 +1,7 @@
 import { type ReactElement, useState } from 'react'
 
-import { Button } from '@/components/ui/button'
 import { pauseLocalDownload, resumeLocalDownload } from '@/clawk'
+import { Button } from '@/components/ui/button'
 import { useI18n } from '@/i18n'
 import { Loader2, Pause, Play } from '@/lib/icons'
 import { cn } from '@/lib/utils'

@@ -1,10 +1,10 @@
 import type * as React from 'react'
 import { useState } from 'react'
 
+import type { MessagingEnvVarInfo } from '@/clawk'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Tip } from '@/components/ui/tooltip'
-import type { MessagingEnvVarInfo } from '@/clawk'
 import { useI18n } from '@/i18n'
 import { Plus, X } from '@/lib/icons'
 

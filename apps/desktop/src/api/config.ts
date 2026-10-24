@@ -1,12 +1,12 @@
 import type {
   AppHandoffStatus,
+  ClawksisConfig,
+  ClawksisConfigRecord,
   ConfigSchemaResponse,
   CustomEndpointsResponse,
   CustomEndpointUpdate,
   CustomEndpointValidationResponse,
   EnvVarInfo,
-  ClawksisConfig,
-  ClawksisConfigRecord,
   LogsResponse,
   OAuthPollResponse,
   OAuthProvidersResponse,
@@ -193,7 +193,10 @@ export function saveClawksisConfig(
 /** Capability-scoped counterpart of saveClawksisConfig — writes the config of
  *  the profile/connection the Capabilities scope selector points at (possibly
  *  on another registered gateway), mirroring getClawksisConfigRecord. */
-export function saveClawksisConfigRecord(config: ClawksisConfigRecord, profile?: ProfileScope): Promise<{ ok: boolean }> {
+export function saveClawksisConfigRecord(
+  config: ClawksisConfigRecord,
+  profile?: ProfileScope
+): Promise<{ ok: boolean }> {
   return window.clawkDesktop.api<{ ok: boolean }>({
     ...resolveConfigWriteScope(config, profile),
     path: '/api/config',

@@ -2,8 +2,8 @@ import { useQuery } from '@tanstack/react-query'
 import { useMemo } from 'react'
 
 import { PanelEmpty } from '@/app/overlays/panel'
-import { Button } from '@/components/ui/button'
 import { type ProfileScope, testMcpServer } from '@/clawk'
+import { Button } from '@/components/ui/button'
 import { useI18n } from '@/i18n'
 import { PROBE_TTL_MS } from '@/lib/mcp-probe-cache'
 

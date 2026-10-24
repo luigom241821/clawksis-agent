@@ -1,8 +1,8 @@
 import type { ReactNode } from 'react'
 
 import type { DelegationRouting } from '@/api/delegation'
-import { Button } from '@/components/ui/button'
 import type { ProfileScope } from '@/clawk'
+import { Button } from '@/components/ui/button'
 import { useI18n } from '@/i18n'
 import type { DelegationRoutingTranslations } from '@/i18n/types_delegation_routing'
 import { Info } from '@/lib/icons'

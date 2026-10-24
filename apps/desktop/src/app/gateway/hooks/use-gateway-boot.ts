@@ -12,9 +12,9 @@ import { useEffect, useRef } from 'react'
 import { canonicalOwnerProfile } from '@/api/canonical-protocol'
 import { createGatewayEventDedupe } from '@/app/gateway/gateway-event-dedupe'
 import { reportStartupLatency } from '@/app/gateway/report-startup-latency'
-import { shouldApplyPostBootProgressError } from '@/components/boot-failure-reauth'
-import type { DesktopBootProgress, ClawksisConnection, ClawksisWindowState } from '@/global'
 import { ClawksisGateway } from '@/clawk'
+import { shouldApplyPostBootProgressError } from '@/components/boot-failure-reauth'
+import type { ClawksisConnection, ClawksisWindowState, DesktopBootProgress } from '@/global'
 import { translateNow } from '@/i18n'
 import { desktopDefaultCwd } from '@/lib/desktop-fs'
 import {
@@ -155,7 +155,9 @@ const BOOT_RETRY_BASE_DELAY_MS = 2_000
 // own connect timeout.
 
 /** Registry identity whose runtimes died with the primary connection. */
-export function primaryRuntimeConnectionId(connection: Pick<ClawksisConnection, 'connectionId' | 'mode'>): null | string {
+export function primaryRuntimeConnectionId(
+  connection: Pick<ClawksisConnection, 'connectionId' | 'mode'>
+): null | string {
   const connectionId = connection.connectionId?.trim()
 
   if (connectionId) {

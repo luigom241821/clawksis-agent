@@ -8,9 +8,9 @@ import { droppedFileInlineRefs } from '../composer/inline-refs'
 
 import {
   attachmentPreviewDataUrl,
+  CLAWK_PATHS_MIME,
   type DroppedFile,
   extractDroppedFiles,
-  CLAWK_PATHS_MIME,
   partitionDroppedFiles,
   resolveImageAttachmentPreview,
   useComposerActions

@@ -2,17 +2,6 @@ import { useStore } from '@nanostores/react'
 import type * as React from 'react'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
-import { PageLoader } from '@/components/page-loader'
-import { StatusDot, type StatusTone } from '@/components/status-dot'
-import { Alert, AlertDescription } from '@/components/ui/alert'
-import { Button } from '@/components/ui/button'
-import { ConfirmDialog } from '@/components/ui/confirm-dialog'
-import { DisclosureCaret } from '@/components/ui/disclosure-caret'
-import { ErrorBanner } from '@/components/ui/error-state'
-import { Input } from '@/components/ui/input'
-import { Switch } from '@/components/ui/switch'
-import { ResponsiveTabs } from '@/components/ui/tab-dropdown'
-import { Tip } from '@/components/ui/tooltip'
 import {
   approvePairing,
   getMessagingPlatforms,
@@ -25,6 +14,17 @@ import {
   type TelegramOnboardingApplyResponse,
   updateMessagingPlatform
 } from '@/clawk'
+import { PageLoader } from '@/components/page-loader'
+import { StatusDot, type StatusTone } from '@/components/status-dot'
+import { Alert, AlertDescription } from '@/components/ui/alert'
+import { Button } from '@/components/ui/button'
+import { ConfirmDialog } from '@/components/ui/confirm-dialog'
+import { DisclosureCaret } from '@/components/ui/disclosure-caret'
+import { ErrorBanner } from '@/components/ui/error-state'
+import { Input } from '@/components/ui/input'
+import { Switch } from '@/components/ui/switch'
+import { ResponsiveTabs } from '@/components/ui/tab-dropdown'
+import { Tip } from '@/components/ui/tooltip'
 import { type Translations, useI18n } from '@/i18n'
 import { openExternalLink } from '@/lib/external-link'
 import { AlertTriangle, ExternalLink, RefreshCw, Save, Trash2 } from '@/lib/icons'

@@ -1,9 +1,9 @@
 import { useQuery } from '@tanstack/react-query'
 import { useMemo } from 'react'
 
+import { getSkillContent, type ProfileScope, profileScopeKey } from '@/clawk'
 import { PageLoader } from '@/components/page-loader'
 import { Button } from '@/components/ui/button'
-import { getSkillContent, type ProfileScope, profileScopeKey } from '@/clawk'
 import { useI18n } from '@/i18n'
 import type { SkillInfo } from '@/types/clawk'
 

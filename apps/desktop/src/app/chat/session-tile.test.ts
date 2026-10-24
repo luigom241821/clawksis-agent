@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-import type { ClawksisConnection } from '@/global'
 import { getSession } from '@/clawk'
+import type { ClawksisConnection } from '@/global'
 import { clearSessionDraft, stashSessionDraft } from '@/store/composer'
 import { $gatewaySwitching } from '@/store/gateway-switch'
 import { $activeGatewayProfile, $profiles } from '@/store/profile'

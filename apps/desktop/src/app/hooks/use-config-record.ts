@@ -133,7 +133,9 @@ const writeClawksisConfigCache =
   (keyFor: () => ReturnType<typeof clawkConfigKey>) =>
   (
     next:
-      ClawksisConfigRecord | undefined | ((previous: ClawksisConfigRecord | undefined) => ClawksisConfigRecord | undefined)
+      | ClawksisConfigRecord
+      | undefined
+      | ((previous: ClawksisConfigRecord | undefined) => ClawksisConfigRecord | undefined)
   ) =>
     void queryClient.setQueryData<ClawksisConfigRecord>(keyFor(), previous => {
       const record = typeof next === 'function' ? next(previous) : next

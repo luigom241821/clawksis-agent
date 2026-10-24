@@ -346,7 +346,8 @@ export const zhHantSettings = {
       reactionsTitle: '訊息回應',
       reactionsDesc: 'iMessage 風格的表情回應 — 你可以對訊息做出回應，Clawksis 也能回應你的訊息。',
       tipsTitle: '應用程式內提示',
-      tipsDesc: '偶爾顯示來自應用程式和 Clawksis 的提示，每則提示只出現一次。開始使用滿30天後自動關閉，你可以重新開啟。',
+      tipsDesc:
+        '偶爾顯示來自應用程式和 Clawksis 的提示，每則提示只出現一次。開始使用滿30天後自動關閉，你可以重新開啟。',
       tipsReset: (count: number) => `再次顯示 ${count} 則提示`,
       toursTitle: '導覽',
       toursDesc: '讓 Clawksis 逐步標示每個位置，帶你認識應用程式。開始使用滿30天後自動關閉，你可以重新開啟。',
@@ -386,7 +387,8 @@ export const zhHantSettings = {
         title: '寵物',
         intro:
           '領養一隻懸浮在應用上的 petdex 動畫寵物，它會根據 Clawksis 的狀態做出反應——工具執行時奔跑、成功時歡呼、出錯時沮喪。',
-        restartHint: '寵物功能需要重新啟動——目前執行的應用在此功能加入前啟動。請結束並重新開啟 Clawksis，然後回到此處。',
+        restartHint:
+          '寵物功能需要重新啟動——目前執行的應用在此功能加入前啟動。請結束並重新開啟 Clawksis，然後回到此處。',
         scaleTitle: '大小',
         scaleDesc: '調整懸浮寵物的大小，所有介面即時生效。',
         roamTitle: '漫遊',
@@ -809,7 +811,8 @@ export const zhHantSettings = {
       description:
         '在 Mac 上按下並放開 ⌘ + Option，在 Windows/Linux 上按下並放開 Ctrl + Alt，即可從任何應用程式將 HUD 帶到前景。預設關閉，僅適用於此裝置。',
       permission: '請在系統設定 → 隱私權與安全性 → 輸入監控中允許 Clawksis，然後重試。此手勢不會記錄按鍵或擷取畫面。',
-      unavailable: 'HUD 手勢輔助程式無法啟動或意外停止。請重試或重新啟動 Clawksis。Clawksis 內原有的 HUD 快速鍵仍可使用。',
+      unavailable:
+        'HUD 手勢輔助程式無法啟動或意外停止。請重試或重新啟動 Clawksis。Clawksis 內原有的 HUD 快速鍵仍可使用。',
       missingHelper: '此 Clawksis 安裝缺少 HUD 手勢輔助程式。請更新或重新安裝 Clawksis，然後重試。',
       unsupportedSession: '此桌面工作階段不支援全域修飾鍵輕按事件。Linux 需要 X11；不支援 Wayland。'
     },
@@ -1012,7 +1015,8 @@ export const zhHantSettings = {
       authenticate: '驗證',
       noOutput: '尚無輸出。',
       deepLinkTitle: '新增 MCP 伺服器？',
-      deepLinkDescription: '一個連結要求將此 MCP 伺服器加入 Clawksis。請檢查下方的完整設定——它來自該連結，而非 Clawksis。',
+      deepLinkDescription:
+        '一個連結要求將此 MCP 伺服器加入 Clawksis。請檢查下方的完整設定——它來自該連結，而非 Clawksis。',
       deepLinkStdioWarning: '此伺服器會使用下方所示指令在你的電腦上執行本機程序。僅在信任其來源時繼續。',
       deepLinkConfirm: '新增伺服器',
       deepLinkNameInvalid: '名稱須為 1-64 個字母、數字、點、連字號或底線。',

@@ -5,6 +5,7 @@ import { type ReactNode, useEffect, useId } from 'react'
 import { useGatewayRequest } from '@/app/gateway/hooks/use-gateway-request'
 import { CAPABILITIES_ROUTE } from '@/app/routes'
 import type { ModelSelection } from '@/app/shell/model-menu-panel'
+import { getGlobalModelOptions, type ProfileScope } from '@/clawk'
 import { Button } from '@/components/ui/button'
 import {
   Dialog,
@@ -14,7 +15,6 @@ import {
   DialogTitle,
   preventCloseButtonAutoFocus
 } from '@/components/ui/dialog'
-import { getGlobalModelOptions, type ProfileScope } from '@/clawk'
 import { type Translations, useI18n } from '@/i18n'
 import { CheckCircle2, Loader2 } from '@/lib/icons'
 import {

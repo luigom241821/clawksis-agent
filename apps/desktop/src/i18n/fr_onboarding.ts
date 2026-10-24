@@ -4,7 +4,8 @@ export const frOnboarding: TranslationOverrides['onboarding'] = {
   headerTitle: 'Configurons Clawksis pour vous',
   headerDesc:
     'Connectez un fournisseur de modèles pour commencer à discuter. La plupart des options nécessitent un clic.',
-  preparingInstall: "Clawksis finalise l'installation. Cela prend généralement moins d'une minute au premier lancement.",
+  preparingInstall:
+    "Clawksis finalise l'installation. Cela prend généralement moins d'une minute au premier lancement.",
   starting: 'Démarrage de Clawksis…',
   setupSlowTitle: 'La configuration prend plus de temps que d’habitude.',
   setupSlowBody: 'Clawksis est toujours en cours de démarrage en arrière-plan.',

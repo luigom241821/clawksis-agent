@@ -1,6 +1,6 @@
 import type { IconComponent } from '@/lib/icons'
 import { normalize } from '@/lib/text'
-import type { ConfigFieldSchema, EnvVarInfo, ClawksisConfigRecord } from '@/types/clawk'
+import type { ClawksisConfigRecord, ConfigFieldSchema, EnvVarInfo } from '@/types/clawk'
 
 import { FIELD_LABELS, SECTIONS } from './constants'
 import { credentialRowLabel } from './credential-key-ui'
