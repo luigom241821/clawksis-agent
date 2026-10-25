@@ -183,11 +183,16 @@ def sync_evicting(
 ) -> None:
     """Build the discovered selection, disabling whatever plugin keeps it from building.
 
-    Static misfits go first (no resolver needed). If the rest still fails, core alone is
-    built to prove the plugins are the cause, then members are re-added in config order
-    and each one that breaks the build is disabled too.
+    Static misfits go first (no resolver needed). A recorded extra that uv blames for a
+    build failure leaves the selection next (pm.extra_eviction). If the rest still fails,
+    core alone is built to prove the plugins are the cause, then members are re-added in
+    config order and each one that breaks the build is disabled too.
     """
-    from pm import receipt
+    from pm import paths, receipt
+    from pm.environment import _project_name
+    from pm.extra_eviction import commit_dropping_extras, without_dropped
+    from pm.extra_eviction import kept as kept_extras
+    from pm.extra_eviction import notices as extra_notices
     from pm.install import _commit_selection, _runtime_state_matches, _target_selection
     from pm.plugins_state import dependency_homes, read_home_selection
     from pm.workspace import _is_member_candidate, enabled_plugin_entries
@@ -202,6 +207,7 @@ def sync_evicting(
             )
     entries = enabled_plugin_entries(skip_invalid_secondary=True)
     reasons, waiting = static_verdicts(entries, _interpreter_version())
+    dropped: dict[str, str] = {}  # extra -> the package uv could not build
 
     def members() -> list[Path]:
         return list(
@@ -217,8 +223,8 @@ def sync_evicting(
     def commit() -> None:
         enabled, stamp, inputs = _target_selection(
             package,
-            fact,
-            extras=extras,
+            without_dropped(fact, dropped, shipped),
+            extras=kept_extras(extras, dropped),
             inputs={"plugin_dirs": members()},
             repair=False,
             shipped=shipped,
@@ -240,14 +246,19 @@ def sync_evicting(
 
     kept = members()
     try:
-        commit()
+        commit_dropping_extras(
+            commit,
+            project=_project_name(paths.repo_root()),
+            recorded=[*fact.get("extras", shipped or []), *(extras or [])],
+            dropped=dropped,
+        )
     except InstallError as failure:
         if not kept:
             raise
         enabled = _target_selection(
             package,
-            fact,
-            extras=extras,
+            without_dropped(fact, dropped, shipped),
+            extras=kept_extras(extras, dropped),
             inputs={"plugin_dirs": []},
             repair=False,
             shipped=shipped,
@@ -278,6 +289,7 @@ def sync_evicting(
                 f"Left plugin '{name}' in {plugins_dir.parent} out of this update: {waiting[key]}; "
                 "it stays enabled and rejoins once Clawksis reports a version it accepts"
             )
+    notices.extend(extra_notices(dropped))
     for message in notices:
         print(f"⚠ {message}", file=sys.stderr, flush=True)
         receipt.record_warning(message)

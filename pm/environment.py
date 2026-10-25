@@ -80,6 +80,10 @@ class ResolutionConflict(InstallError):
 class BuildFailure(InstallError):
     """A package's build backend ran and failed."""
 
+    # Whole uv output: the hint naming which extra pulled the package in can sit
+    # before the tail kept in ``cause`` (pm.extra_eviction reads it).
+    output: str = ""
+
 
 def _is_bytecode_compile_failure(result: subprocess.CompletedProcess) -> bool:
     """True when uv failed in the optional bytecode-compile step, not the install.
@@ -109,7 +113,9 @@ def classify_uv_failure(stage: str, returncode: int, output: str) -> InstallErro
     if any(marker in lowered for marker in _RESOLVER_MARKERS):
         return ResolutionConflict("venv", cause)
     if any(marker in lowered for marker in _BUILD_MARKERS):
-        return BuildFailure("venv", cause)
+        failure = BuildFailure("venv", cause)
+        failure.output = output
+        return failure
     return InstallError("venv", cause)
 
 
